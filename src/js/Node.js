@@ -1223,7 +1223,7 @@ Node.prototype._updateDomValue = function () {
     var type = (this.type == 'auto') ? util.type(value) : this.type;
     var isUrl = type == 'string' && util.isUrl(value);
     classNames.push('jsoneditor-' + type);
-    if (isUrl || this.schema.is_path) {
+    if (isUrl || this.schema.is_path || this.schema.is_dir_path) {
       classNames.push('jsoneditor-url');
     }
 
@@ -2142,7 +2142,7 @@ Node.prototype._createDomValue = function () {
     else {
       // create an editable or read-only div
       domValue = document.createElement('div');
-      domValue.contentEditable = this.editable.value && (!this.schema.is_path);
+      domValue.contentEditable = this.editable.value && !(this.schema.is_path ||  this.schema.is_dir_path);
       domValue.spellcheck = false;
       domValue.innerHTML = this._escapeHTML(this.value);
     }
@@ -2223,12 +2223,11 @@ Node.prototype._createDomTree = function () {
   // needed to know if we use an update schema
   this._updateSchema();
   dom.value = this._createDomValue();
-  if (this.schema.is_path) {
+  if (this.schema.is_path || this.schema.is_dir_path) {
     var aValue = document.createElement('a');
     aValue.href = '#';
     aValue.rel = this.field;
     aValue.onclick = function () {
-      console.log('OK', this.rel);
       this.querySelector('input').click();
     }
     //domValue.contentEditable = false;
@@ -2236,13 +2235,19 @@ Node.prototype._createDomTree = function () {
     dom.pInput = document.createElement('input');
     dom.pInput.style.display = 'none';
     dom.pInput.type = 'file';
-    var attr = document.createAttribute('nwdirectory');
-    dom.pInput.setAttributeNode(attr);
+    if (this.schema.is_dir_path) {
+      dom.pInput.setAttributeNode(document.createAttribute('nwdirectory'));
+      dom.pInput.setAttributeNode(document.createAttribute('nwworkingdir'), this.value);
+      console.log('value = ', this.value);
+    } else {
+      dom.pInput.setAttributeNode(document.createAttribute('nwworkingdir'), this.value.match(/.*\//)[0].slice(0, -1));
+      console.log(this.value.match(/.*\//)[0].slice(0, -1));
+    }
     dom.pInput.onchange = this.onEvent.bind(this);
     aValue.appendChild(dom.pInput);
     tdValue.appendChild(aValue);
   } else {
-  tdValue.appendChild(dom.value);
+    tdValue.appendChild(dom.value);
   }
   dom.tdValue = tdValue;
 
@@ -2302,12 +2307,18 @@ Node.prototype.onEvent = function (event) {
   }
 
   // update the value of the node based on the selected option
-  if (type == 'change' && (target == dom.select || target == dom.pInput)) {
-    this.dom.value.innerHTML = target == dom.select ? dom.select.value : dom.pInput.value;
+  if (type == 'change' && target == dom.select) {
+    this.dom.value.innerHTML = dom.select.value;
     this._getDomValue();
     this._updateDomValue();
   }
-
+  if (type == 'change' && target == dom.pInput) {
+    if (dom.pInput.value.length > 0) {
+      this.dom.value.innerHTML = dom.pInput.value;
+      this._getDomValue();
+      this._updateDomValue();
+    }
+  }
   // value events
   var domValue = dom.value;
   if (target == domValue) {
